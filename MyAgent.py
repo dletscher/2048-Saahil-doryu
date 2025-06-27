@@ -1,5 +1,7 @@
 from Game2048 import *
 import math
+import random
+import time
 
 class Player(BasePlayer):
     def __init__(self, timeLimit):
@@ -9,85 +11,65 @@ class Player(BasePlayer):
         self._childCount = 0
         self._depthCount = 0
         self._count = 0
+        self.num_simulations = 200
+        self.max_depth = 10
 
     def findMove(self, state):
         self._count += 1
-        bestMove = None
+        actions = self.moveOrder(state)
         depth = 1
-
         while self.timeRemaining():
             self._depthCount += 1
             self._parentCount += 1
             self._nodeCount += 1
-
-            print(f"Search depth {depth}")
-
-            bestValue = -math.inf
-            for move in self.moveOrder(state):
-                if not self.timeRemaining(): 
-                    break
-                child, _ = state.result(move)
-                val = self.expectimax(child, depth - 1, isPlayerTurn=False)
-                if val is None: 
-                    break
-                if val > bestValue:
-                    bestValue = val
-                    bestMove = move
-
-            if bestMove is not None:
-                self.setMove(bestMove)
-                print(f"\tBest expected value: {bestValue} → {bestMove}")
-
+            print('Search depth', depth)
+            bestMove = None
+            best = -float('inf')
+            for a in actions:
+                if not self.timeRemaining():
+                    return
+                result, _ = state.result(a)
+                v = self.monte_carlo_simulation(result)
+                if v is None:
+                    return
+                if v > best:
+                    best = v
+                    bestMove = a
+            self.setMove(bestMove if bestMove else actions[0])
+            print('\tBest value', best, bestMove)
             depth += 1
 
-    def expectimax(self, state, depth, isPlayerTurn):
-        self._nodeCount += 1
+    def monte_carlo_simulation(self, state):
+        total_score = 0
+        
+        for _ in range(self.num_simulations):
+            if not self.timeRemaining():
+                break
+            sim_score = self.simulate_random_play(state)
+            total_score += sim_score
+            
+        return total_score / self.num_simulations if self.num_simulations > 0 else 0
 
-        if state.gameOver():
-            return state.getScore()
-
-        if depth == 0:
-            return self.heuristic(state)
-
-        if isPlayerTurn:
-            best = -math.inf
-            for move in self.moveOrder(state):
-                if not self.timeRemaining():
-                    return None
-                child, _ = state.result(move)
-                val = self.expectimax(child, depth, isPlayerTurn=False)
-                if val is None:
-                    return None
-                best = max(best, val)
-                self._childCount += 1
-            self._parentCount += 1
-            return best
-
-        else:
-            exp_value = 0.0
-            total_prob = 0.0
-            for move in state.actions():
-                for next_state, prob in state.possibleResults(move):
-                    if not self.timeRemaining():
-                        return None
-                    val = self.expectimax(next_state, depth - 1, isPlayerTurn=True)
-                    if val is None:
-                        return None
-                    exp_value += prob * val
-                    total_prob += prob
-                    self._childCount += 1
-            self._parentCount += 1
-            if total_prob == 0:
-                return self.heuristic(state)
-            return exp_value / total_prob
+    def simulate_random_play(self, state):
+        current_state = state
+        depth = 0
+        
+        while not current_state.gameOver() and depth < self.max_depth:
+            if not self.timeRemaining():
+                break
+                
+            actions = current_state.actions()
+            if not actions:
+                break
+                
+            random_action = random.choice(actions)
+            current_state, _ = current_state.result(random_action)
+            depth += 1
+            
+        return current_state.getScore()
 
     def heuristic(self, state):
-         empty = 0
-         for i in range(4):
-                for j in range(4):
-                    if state.getTile(i, j) == 0:
-                        empty += 1
-         return empty + state.getScore()
+        return state.getScore()
 
     def moveOrder(self, state):
         return state.actions()
@@ -95,3 +77,5 @@ class Player(BasePlayer):
     def stats(self):
         print(f"Average depth: {self._depthCount/self._count:.2f}")
         print(f"Branching factor: {self._childCount / self._parentCount:.2f}")
+        print(f"Monte Carlo simulations per move: {self.num_simulations}")
+        print(f"Max simulation depth: {self.max_depth}")
