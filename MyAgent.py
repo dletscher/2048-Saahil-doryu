@@ -11,8 +11,8 @@ class Player(BasePlayer):
         self._childCount = 0
         self._depthCount = 0
         self._count = 0
-        self.num_simulations = 200
-        self.max_depth = 10
+        self.num_simulations = 50
+        self.max_depth = 5
 
     def findMove(self, state):
         self._count += 1
